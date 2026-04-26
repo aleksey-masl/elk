@@ -1,34 +1,37 @@
-filebeat.config:
-  modules:
-    path: ${path.config}/modules.d/*.yml
-    reload.enabled: false
-
-filebeat.autodiscover:
-  providers:
-    - type: docker
-      hints.enabled: true  # Включаем подсказки для обнаружения Docker-контейнеров
-
-# Определяем общие настройки для всех контейнеров
 filebeat.inputs:
   - type: filestream
     id: system-logs
     paths:
       - /var/log/*.log
     fields:
-      log_type: system  # Добавьте пользовательское поле для идентификации
+      log_type: system
       data_stream.type: logs
       data_stream.dataset: system_log
       data_stream.namespace: default
+    fields_under_root: true
 
-    fields_under_root: true  # Поместите пользовательские поля на корень документа
-
-setup.ilm.enabled: true 
-setup.ilm.policy_name: "delete-after-30-days"
-setup.ilm.check_exists: false
-setup.template.enabled: false
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+      # Дефолтные поля для всех контейнеров без специфичных лейблов
+      templates:
+        - config:
+            - type: container
+              paths:
+                - /var/lib/docker/containers/${data.docker.container.id}/*.log
+              fields:
+                log_type: docker
+                data_stream.type: logs
+                data_stream.dataset: docker  # можно переопределить лейблом контейнера
+                data_stream.namespace: default
+              fields_under_root: true
 
 processors:
-  - add_docker_metadata: ~  # Добавляем метаданные Docker
+  - add_docker_metadata: ~
+
+setup.ilm.enabled: false
+setup.template.enabled: false
 
 setup.kibana:
   host: ${KIBANA_HOSTS}
@@ -42,10 +45,13 @@ output.elasticsearch:
   ssl.enabled: true
   ssl.certificate_authorities: "certs/ca/ca.crt"
 
-# Настройка индексов для разных типов логов
   indices:
-    - index: "%{[data_stream.type]}-%{[data_stream.dataset]}-%{[data_stream.namespace]}"   # Индекс для системных логов
+    - index: "%{[data_stream.type]}-%{[data_stream.dataset]}-%{[data_stream.namespace]}"
       when:
         contains:
-          log_type: "system"  # Условие для системных логов
+          log_type: "system"    # → logs-system_log-default
 
+    - index: "%{[data_stream.type]}-%{[data_stream.dataset]}-%{[data_stream.namespace]}"
+      when:
+        contains:
+          log_type: "docker"    # → logs-docker-default

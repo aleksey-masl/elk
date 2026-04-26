@@ -1,0 +1,45 @@
+filebeat.inputs:
+  - type: filestream
+    id: system-logs
+    paths:
+      - /var/log/*.log
+    fields:
+      log_type: system
+      data_stream.type: logs
+      data_stream.dataset: system
+      data_stream.namespace: default
+
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+      hints.default_config:
+        type: container
+        paths:
+          - /var/lib/docker/containers/${data.docker.container.id}/*-json.log
+        fields:
+          log_type: docker
+          data_stream.type: logs
+          data_stream.dataset: docker
+          data_stream.namespace: default
+        processors:
+          - add_docker_metadata: ~
+
+
+output.elasticsearch:
+  hosts: ${ELASTIC_HOSTS}
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+  ssl.enabled: true
+  ssl.certificate_authorities: "certs/ca/ca.crt"
+
+# Настройка индексов для разных типов логов
+  indices:
+    - index: "%{[data_stream.type]}-%{[data_stream.dataset]}-%{[data_stream.namespace]}"   # Индекс для системных логов
+      when:
+        contains:
+          log_type: "system"  # Условие для системных логов
+    - index: "%{[data_stream.type]}-%{[data_stream.dataset]}-%{[data_stream.namespace]}"
+      when.contains:
+        log_type: "docker"   # Индекс для Docker-логов
+

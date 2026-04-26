@@ -297,9 +297,9 @@ services:
 
   filebeat01:
     container_name: filebeat01
-    depends_on:
-      es01:
-        condition: service_healthy
+#    depends_on:
+#      es01:
+#        condition: service_healthy
     image: elastic/filebeat:${STACK_VERSION}
     user: root
     volumes:
