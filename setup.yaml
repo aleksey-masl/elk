@@ -1,0 +1,42 @@
+networks:
+  default:
+    name: elastic
+    external: false
+
+services:
+  setup1:
+    container_name: setup1
+    image: elasticsearch:${STACK_VERSION}
+    volumes:
+      - ./certs:/usr/share/elasticsearch/config/certs
+    user: "0"
+    command: >
+      bash -c '
+        if [ ! -f config/certs/ca.zip ]; then
+          echo "Creating CA";
+          bin/elasticsearch-certutil ca --silent --pem --days 3650 -out config/certs/ca.zip;
+          unzip config/certs/ca.zip -d config/certs;
+        fi;
+        if [ ! -f config/certs/certs.zip ]; then
+          bin/elasticsearch-certutil cert --silent --pem \
+            --name certs \
+            --ca-cert config/certs/ca/ca.crt \
+            --ca-key config/certs/ca/ca.key \
+            --dns "el01,el02,el03,kibana" \
+            --ip 192.168.122.60 \
+            --ip 192.168.122.123 \
+            --ip 192.168.122.152 \
+            --days 3650 \
+            --out config/certs/certs.zip;
+          unzip config/certs/certs.zip -d config/certs;
+        fi;
+        echo "Setting file permissions"
+        chown -R root:root config/certs;
+        find . -type d -exec chmod 750 \{\} \;;
+        find . -type f -exec chmod 640 \{\} \;;
+      '
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f config/certs/es01/es01.crt ]"]
+      interval: 1s
+      timeout: 5s
+      retries: 120
